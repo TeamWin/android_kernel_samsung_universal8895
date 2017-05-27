@@ -594,10 +594,12 @@ void __bio_clone_fast(struct bio *bio, struct bio *bio_src)
 	bio->bi_iter = bio_src->bi_iter;
 	bio->bi_io_vec = bio_src->bi_io_vec;
 	bio->bi_dio_inode = bio_src->bi_dio_inode;
+#if defined(CONFIG_FMP_DM_CRYPT) || defined(CONFIG_FMP_EXT4CRYPT_FS)
 	bio->private_enc_mode = bio_src->private_enc_mode;
 	bio->private_enc_algo = bio_src->private_enc_algo;
 	bio->key = bio_src->key;
 	bio->key_length = bio_src->key_length;
+#endif
 
 	bio_clone_blkcg_association(bio, bio_src);
 }
