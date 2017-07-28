@@ -140,7 +140,7 @@ static int xhci_plat_probe(struct platform_device *pdev)
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
-		return -ENODEV;
+		return irq;
 
 	/* Try to set 64-bit DMA first */
 	if (WARN_ON(!pdev->dev.dma_mask))
@@ -283,9 +283,8 @@ static int xhci_plat_remove(struct platform_device *dev)
 	struct xhci_hcd	*xhci = hcd_to_xhci(hcd);
 	struct clk *clk = xhci->clk;
 
-	pr_info("%s \n", __func__);
-
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
+	pr_info("%s \n", __func__);
 	/* In order to prevent kernel panic */
 	if(!pm_runtime_suspended(&xhci->shared_hcd->self.root_hub->dev)) {
 		pr_info("%s, shared_hcd pm_runtime_forbid\n", __func__);
@@ -295,9 +294,7 @@ static int xhci_plat_remove(struct platform_device *dev)
 		pr_info("%s, main_hcd pm_runtime_forbid\n", __func__);
 		pm_runtime_forbid(&xhci->main_hcd->self.root_hub->dev);
 	}
-#endif
 
-#if defined(CONFIG_USB_TYPEC_MANAGER_NOTIFIER)
 	manager_notifier_unregister(&xhci->ccic_xhci_nb);
 #endif
 

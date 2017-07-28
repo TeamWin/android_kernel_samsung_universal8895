@@ -21,6 +21,7 @@
 #include <linux/proc_fs.h>
 #include <linux/delay.h>
 #include <linux/regmap.h>
+#include <linux/wakelock.h>
 
 #include <asm-generic/delay.h>
 
@@ -182,7 +183,7 @@ static int vts_platform_open(struct snd_pcm_substream *substream)
 		}
 	}
 
-	return 0;
+	return result;
 }
 
 static int vts_platform_close(struct snd_pcm_substream *substream)

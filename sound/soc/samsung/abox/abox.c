@@ -3042,15 +3042,16 @@ int abox_request_cpu_gear(struct device *dev, struct abox_data *data, void *id, 
 
 	abox_check_call_cpu_gear(dev, data, request->id, request->value, id, gear);
 
-	request->id = id;
 	request->value = gear;
+	wmb();
+	request->id = id;
 
 	if (request - data->ca7_gear_requests >= ARRAY_SIZE(data->ca7_gear_requests)) {
 		dev_err(dev, "%s: out of index. id=%p, gear=%u \n", __func__, id, gear);
 		return -ENOMEM;
 	}
 
-	schedule_work(&data->change_cpu_gear_work);
+	queue_work(system_freezable_wq, &data->change_cpu_gear_work);
 
 	return 0;
 }
@@ -3060,6 +3061,22 @@ int abox_request_cpu_gear_sync(struct device *dev, struct abox_data *data, void 
 	int result = abox_request_cpu_gear(dev, data, id, gear);
 	flush_work(&data->change_cpu_gear_work);
 	return result;
+}
+
+static void abox_clear_cpu_gear_requests(struct device *dev, struct abox_data *data)
+{
+	struct abox_qos_request *req;
+	size_t len = ARRAY_SIZE(data->ca7_gear_requests);
+
+	dev_info(dev, "%s\n", __func__);
+
+	for (req = data->ca7_gear_requests; req - data->ca7_gear_requests < len
+			&& req->id; req++) {
+		if (req->value < CPU_GEAR_LOWER_LIMIT) {
+			req->value = CPU_GEAR_LOWER_LIMIT;
+			abox_request_cpu_gear(dev, data, req->id, req->value);
+		}
+	}
 }
 
 static void abox_change_mif_freq_work_func(struct work_struct *work)
@@ -3126,8 +3143,9 @@ int abox_request_lit_freq(struct device *dev, struct abox_data *data,
 	if ((request->id == id) && (request->value == freq))
 		return 0;
 
-	request->id = id;
 	request->value = freq;
+	wmb();
+	request->id = id;
 
 	dev_info(dev, "%s(%p, %u)\n", __func__, id, freq);
 
@@ -3189,8 +3207,9 @@ int abox_request_big_freq(struct device *dev, struct abox_data *data,
 
 	dev_info(dev, "%s(%p, %u)\n", __func__, id, freq);
 
-	request->id = id;
 	request->value = freq;
+	wmb();
+	request->id = id;
 
 	if (request - data->big_requests >= ARRAY_SIZE(data->big_requests)) {
 		dev_err(dev, "%s: out of index. id=%p, freq=%u\n",
@@ -3251,8 +3270,9 @@ int abox_request_hmp_boost(struct device *dev, struct abox_data *data,
 
 	dev_info(dev, "%s(%p, %u)\n", __func__, id, on);
 
-	request->id = id;
 	request->value = on;
+	wmb();
+	request->id = id;
 
 	if (request - data->hmp_requests >= ARRAY_SIZE(data->hmp_requests)) {
 		dev_err(dev, "%s: out of index. id=%p, on=%u\n",
@@ -3280,9 +3300,9 @@ void abox_request_dram_on(struct platform_device *pdev_abox, void *id, bool on)
 			request++) {
 	}
 
-	request->id = id;
 	request->on = on;
-
+	wmb();
+	request->id = id;
 
 	for (request = data->dram_requests;
 			request - data->dram_requests < ARRAY_SIZE(data->dram_requests)
@@ -4469,8 +4489,9 @@ int abox_request_l2c(struct device *dev, struct abox_data *data,
 			request++) {
 	}
 
-	request->id = id;
 	request->on = on;
+	wmb();
+	request->id = id;
 
 	if (request - data->l2c_requests >= ARRAY_SIZE(data->l2c_requests)) {
 		dev_err(dev, "%s: out of index. id=%p, on=%d\n",
@@ -4616,6 +4637,7 @@ static int abox_disable(struct device *dev)
 		break;
 	}
 	abox_clear_l2c_requests(dev, data);
+	abox_clear_cpu_gear_requests(dev, data);
 	flush_work(&data->boot_done_work);
 	flush_work(&data->l2c_work);
 

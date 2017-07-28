@@ -29,6 +29,7 @@
 #include <asm/esr.h>
 #include <asm/memory.h>
 #include <asm/thread_info.h>
+#include <asm/asm-uaccess.h>
 #include <asm/unistd.h>
 
 /*
@@ -327,8 +328,6 @@ el1_sync:
 	kernel_entry 1
 	mrs	x1, esr_el1			// read the syndrome register
 	lsr	x24, x1, #ESR_ELx_EC_SHIFT	// exception class
-	cmp	x24, #ESR_ELx_EC_IABT_CUR	// instruction abort in EL1
-	b.eq	el1_iabt
 	cmp	x24, #ESR_ELx_EC_DABT_CUR	// data abort in EL1
 	b.eq	el1_da
 	cmp	x24, #ESR_ELx_EC_SYS64		// configurable trap
@@ -342,19 +341,11 @@ el1_sync:
 	cmp	x24, #ESR_ELx_EC_BREAKPT_CUR	// debug exception in EL1
 	b.ge	el1_dbg
 	b	el1_inv
-el1_iabt:
-	// TODO: add support for undefined instructions in kernel mode
-	enable_dbg
-	mov	x0, sp
-	mrs	x2, far_el1
-	b	do_iabt
-
 el1_da:
 	/*
 	 * Data abort handling
 	 */
-	mrs	x0, far_el1
-
+	mrs	x3, far_el1
 	enable_dbg
 
 	/*
@@ -368,6 +359,7 @@ el1_da:
 	tbnz	x23, #7, 1f			// PSR_I_BIT
 	enable_irq
 1:
+	clear_address_tag x0, x3
 	mov	x2, sp				// struct pt_regs
 	bl	do_mem_abort
 
@@ -393,9 +385,7 @@ el1_undef:
 	enable_dbg
 	mov	x0, sp
 	mrs	x1, esr_el1			// read the syndrome register
-	mrs	x2, elr_el1
-
-	b	do_undefinstr_el1
+	b	do_undefinstr
 el1_dbg:
 	/*
 	 * Debug exception handling
@@ -536,7 +526,7 @@ el0_da:
 	// enable interrupts before calling the main handler
 	enable_dbg_and_irq
 	ct_user_exit
-	bic	x0, x26, #(0xff << 56)
+	clear_address_tag x0, x26
 	mov	x1, x25
 	mov	x2, sp
 	bl	do_mem_abort
